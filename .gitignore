@@ -1,2 +1,6 @@
 
 *.suo
+/AutoMocker/bin
+/AutoMocker/obj
+/AutoMocker.Specs/bin
+/AutoMocker.Specs/obj
