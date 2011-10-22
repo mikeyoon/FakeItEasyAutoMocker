@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using FakeItEasy;
 
-namespace AutoMocker
+namespace FakeItEasy
 {
     public class MockContainer<T> where T : class
     {

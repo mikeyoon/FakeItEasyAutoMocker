@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using FakeItEasy;
 using System.Reflection;
-using AutoMocker;
+using FakeItEasy.AutoMocker;
 using System.Linq.Expressions;
 
 namespace FakeItEasy
@@ -12,19 +12,21 @@ namespace FakeItEasy
     public static class B
     {
         /// <summary>
-        /// Creates a concrete instance of the given class with its entire dependency tree faked.
+        /// Creates a concrete instance of the given class with its entire dependency tree faked. If 
+        /// recursive is false, it will rely on FakeItEasy to recursively automock all dependencies, which
+        /// can fail easily if any dependency has no public constructor or a "bad" constructor.
         /// </summary>
         /// <remarks>
         /// Uses the greediest constructors
         /// </remarks>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
-        public static MockContainer<T> AutoMock<T>() where T : class
+        public static MockContainer<T> AutoMock<T>(bool recursive = true) where T : class
         {
             ObjectGraph graph = BuildGraph(typeof(T));
 
             var fakes = new Dictionary<Type, object>();
-            var subject = CreateSubject<T>(graph, fakes);
+            var subject = CreateSubject<T>(graph, fakes, recursive);
 
             return new MockContainer<T>(subject, fakes);
         }
@@ -36,6 +38,7 @@ namespace FakeItEasy
 
             ObjectGraph node = new ObjectGraph();
             node.Type = type;
+            node.HasDefaultConstructor = true;
 
             if (constructor != null)
             {
@@ -50,11 +53,15 @@ namespace FakeItEasy
                     }
                 }
             }
+            else if (type.IsClass)
+            {
+                node.HasDefaultConstructor = false;
+            }
 
             return node;
         }
 
-        static T CreateSubject<T>(ObjectGraph graph, Dictionary<Type, object> fakes) where T : class
+        static T CreateSubject<T>(ObjectGraph graph, Dictionary<Type, object> fakes, bool recursive) where T : class
         {
             List<object> parameters = new List<object>();
 
@@ -62,7 +69,15 @@ namespace FakeItEasy
             {
                 foreach (var dep in graph.Dependencies)
                 {
-                    parameters.Add(CreateDependency(dep, fakes));
+                    if (recursive)
+                        parameters.Add(CreateDependency(dep, fakes));
+                    else
+                    {
+                        var types = dep.Dependencies.Select(p => p.Type).ToList();
+                        var fake = CreateFake(dep.Type, types);
+                        fakes[dep.Type] = fake;
+                        parameters.Add(fake);
+                    }
                 }
             }
 
@@ -73,6 +88,9 @@ namespace FakeItEasy
         static object CreateDependency(ObjectGraph graph, Dictionary<Type, object> fakes)
         {
             List<object> parameters = new List<object>();
+
+            if (!graph.HasDefaultConstructor)
+                return null;
 
             if (graph.Dependencies.Any())
             {
@@ -99,7 +117,52 @@ namespace FakeItEasy
             var fakeMethod = mockOpenType.GetMethod("Fake", System.Type.EmptyTypes);
 
             MethodInfo createMethod = fakeMethod.MakeGenericMethod(new[] { type });
-            return createMethod.Invoke(null, null);
+            try
+            {
+                return createMethod.Invoke(null, null);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        static object CreateFake(Type type, List<Type> args)
+        {
+            var mockOpenType = typeof(A);
+            var fakeMethod = mockOpenType.GetMethod("Fake", System.Type.EmptyTypes);
+            var fakeOptionsBuilderType = typeof(Creation.IFakeOptionsBuilder<>);
+
+            var optionsBuilderGeneric = fakeOptionsBuilderType.MakeGenericType(new[] { type });
+            var optionsBuilderWrapped = fakeOptionsBuilderType.MakeGenericType(new[] {
+                    typeof(Action<>).MakeGenericType(new[] {
+                        optionsBuilderGeneric
+                    })
+                });
+            var actionTypeWrapped = typeof(Action<>).MakeGenericType(new[] { optionsBuilderWrapped });
+
+            var actionType = typeof(Action<>).MakeGenericType(new[] { 
+                optionsBuilderGeneric
+            });
+
+            var fakeWithArgsMethod = mockOpenType.GetMethods(BindingFlags.Static | BindingFlags.Public).Where(p => p.Name == "Fake"
+                && (args.Any() && p.GetParameters().Count() > 0 || !args.Any() && p.GetParameters().Count() == 0)).FirstOrDefault();
+            var fakeWithArgsMethodGeneric = fakeWithArgsMethod.MakeGenericMethod(new[] { type });
+
+            LambdaExpression lambda = null;
+
+            if (args.Any())
+            {
+                var constructor = type.GetConstructors().OrderByDescending(p => p.GetParameters().Length).First();
+                var econ = LambdaExpression.New(constructor, args.Select(p => Expression.Default(p)));
+                var param = Expression.Parameter(optionsBuilderGeneric, "var1");
+
+                lambda = Expression.Lambda(actionType, econ, param);
+            }
+
+            var fake = fakeWithArgsMethodGeneric.Invoke(null, lambda != null ? new object[] { lambda.Compile() } : null);
+
+            return fake;
         }
 
         static object CreateFake(Type type, List<object> args)
@@ -122,7 +185,7 @@ namespace FakeItEasy
 
             var fakeWithArgsMethod = mockOpenType.GetMethods(BindingFlags.Static | BindingFlags.Public).Where(p => p.Name == "Fake" 
                 && (args.Any() && p.GetParameters().Count() > 0 || !args.Any() && p.GetParameters().Count() == 0)).FirstOrDefault();
-            var fakeWithArgsMethodGeneric = fakeWithArgsMethod.MakeGenericMethod(new[] { type }); //Action<IFakeOptionsBuilder<type>>
+            var fakeWithArgsMethodGeneric = fakeWithArgsMethod.MakeGenericMethod(new[] { type });
 
             LambdaExpression lambda = null;
 
@@ -130,10 +193,10 @@ namespace FakeItEasy
             {
                 var withArgsMethod = optionsBuilderGeneric.GetMethod("WithArgumentsForConstructor", new Type[] { typeof(IEnumerable<object>) });
 
-                var paramValues = Expression.Constant(args, typeof(object[]));
+                var paramValues = Expression.Constant(args, typeof(List<object>));
                 var genType = Expression.Parameter(type);
                 var param = Expression.Parameter(optionsBuilderGeneric, "var1");
-                var arguments = Expression.Parameter(args.GetType(), "var2"); //args.Select(p => Expression.Parameter(p.GetType())).ToArray();
+                var arguments = Expression.Parameter(args.GetType(), "var2");
                 var invoke = Expression.Call(param, withArgsMethod, paramValues);
                 lambda = Expression.Lambda(actionType, invoke, param);
             }

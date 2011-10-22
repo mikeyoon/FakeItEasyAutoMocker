@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace AutoMocker
+namespace FakeItEasy.AutoMocker
 {
     internal class ObjectGraph
     {
@@ -11,6 +11,8 @@ namespace AutoMocker
         {
             Dependencies = new List<ObjectGraph>();
         }
+
+        public bool HasDefaultConstructor { get; set; }
 
         public Type Type { get; set; }
 

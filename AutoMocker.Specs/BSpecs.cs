@@ -4,12 +4,38 @@ using System.Linq;
 using System.Text;
 using Machine.Specifications;
 using FakeItEasy;
+using System.Linq.Expressions;
 
 namespace AutoMocker.Specs
 {
-    public class when_doing
+    public class when_faking_recursively_and_no_default_constructor
     {
-        static AutoMocker.MockContainer<ASubject> graph;
+        static MockContainer<SubjectWithBadDependencies> graph;
+
+        Establish context = () =>
+        {
+            graph = B.AutoMock<SubjectWithBadDependencies>();
+            A.CallTo(() => graph.GetMock<IDependency>().whatever()).Returns("Faked!!");
+            A.CallTo(() => graph.GetMock<ADependency>().GetString()).Returns("Faked As Well!!");
+        };
+
+        Because of = () => { };
+
+        It should_return_fake_whatever = () =>
+        {
+            graph.Subject.GetSomethingElse().ShouldEqual("Faked!!");
+
+        };
+
+        It should_return_fake_getstring = () =>
+        {
+            graph.Subject.GetSomething().ShouldEqual("Faked As Well!!");
+        };
+    }
+
+    public class when_faking_recursively
+    {
+        static MockContainer<ASubject> graph;
 
         Establish context = () =>
         {
@@ -22,6 +48,7 @@ namespace AutoMocker.Specs
 
         It should_return_fake_whatever = () => {
             graph.Subject.GetSomethingElse().ShouldEqual("Faked!!");
+            
         };
 
         It should_return_fake_getstring = () =>
@@ -30,8 +57,55 @@ namespace AutoMocker.Specs
         };
     }
 
+    public class when_faking_non_recursively
+    {
+        static MockContainer<ASubject> graph;
+
+        Establish context = () =>
+        {
+            graph = B.AutoMock<ASubject>(false);
+            A.CallTo(() => graph.GetMock<IDependency>().whatever()).Returns("Faked!!");
+            A.CallTo(() => graph.GetMock<ADependency>().GetString()).Returns("Faked As Well!!");
+        };
+
+        Because of = () => { };
+
+        It should_return_fake_whatever = () =>
+        {
+            graph.Subject.GetSomethingElse().ShouldEqual("Faked!!");
+
+        };
+
+        It should_return_fake_getstring = () =>
+        {
+            graph.Subject.GetSomething().ShouldEqual("Faked As Well!!");
+        };
+    }
+
+    public class NoConstructorDependency
+    {
+        private NoConstructorDependency()
+        {
+        }
+    }
+
+    public class BDependency
+    {
+        public virtual int GetInt()
+        {
+            return 0;
+        }
+    }
+
     public class ADependency
     {
+        BDependency dep;
+
+        public ADependency(BDependency dep)
+        {
+            this.dep = dep;
+        }
+
         public virtual string GetString()
         {
             return "Stuff";
@@ -62,6 +136,13 @@ namespace AutoMocker.Specs
         public string GetSomethingElse()
         {
             return dep2.whatever();
+        }
+    }
+
+    public class SubjectWithBadDependencies : ASubject
+    {
+        public SubjectWithBadDependencies(NoConstructorDependency dep, ADependency dep2, IDependency dep3) : base(dep2, dep3)
+        {
         }
     }
 }
