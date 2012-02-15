@@ -100,10 +100,12 @@ namespace AutoMocker.Specs
     public class ADependency
     {
         BDependency dep;
+        IDependency idep;
 
-        public ADependency(BDependency dep)
+        public ADependency(BDependency dep, IDependency nested)
         {
             this.dep = dep;
+            this.idep = nested;
         }
 
         public virtual string GetString()
@@ -119,7 +121,7 @@ namespace AutoMocker.Specs
 
     public class ASubject
     {
-        public ASubject(ADependency dep, IDependency dep2)
+        public ASubject(IDependency dep2, ADependency dep)
         {
             this.dep = dep;
             this.dep2 = dep2;
@@ -141,7 +143,8 @@ namespace AutoMocker.Specs
 
     public class SubjectWithBadDependencies : ASubject
     {
-        public SubjectWithBadDependencies(NoConstructorDependency dep, ADependency dep2, IDependency dep3) : base(dep2, dep3)
+        public SubjectWithBadDependencies(NoConstructorDependency dep, ADependency dep2, IDependency dep3)
+            : base(dep3, dep2)
         {
         }
     }

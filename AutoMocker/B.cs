@@ -82,7 +82,7 @@ namespace FakeItEasy
             }
 
             return Activator.CreateInstance(typeof(T), parameters.ToArray()) as T;
-            //After constructing, check for Properties that are null and fill those in if they have virtual stuff
+            //TODO: After constructing, check for Properties that are null and fill those in if they have virtual stuff
         }
 
         static object CreateDependency(ObjectGraph graph, Dictionary<Type, object> fakes)
@@ -91,6 +91,9 @@ namespace FakeItEasy
 
             if (!graph.HasDefaultConstructor)
                 return null;
+
+            if (fakes.ContainsKey(graph.Type))
+                return fakes[graph.Type];
 
             if (graph.Dependencies.Any())
             {
