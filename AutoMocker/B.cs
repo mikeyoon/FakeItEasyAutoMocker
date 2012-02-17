@@ -140,6 +140,7 @@ namespace FakeItEasy
             var fakeMethod = mockOpenType.GetMethod("Fake", System.Type.EmptyTypes);
 
             MethodInfo createMethod = fakeMethod.MakeGenericMethod(new[] { type });
+
             try
             {
                 return createMethod.Invoke(null, null);
@@ -206,6 +207,7 @@ namespace FakeItEasy
                 optionsBuilderGeneric
             });
 
+            A.Fake<int>(p => p.WithArgumentsForConstructor(() => new int()));
             var fakeWithArgsMethod = mockOpenType.GetMethods(BindingFlags.Static | BindingFlags.Public).Where(p => p.Name == "Fake" 
                 && (args.Any() && p.GetParameters().Count() > 0 || !args.Any() && p.GetParameters().Count() == 0)).FirstOrDefault();
             var fakeWithArgsMethodGeneric = fakeWithArgsMethod.MakeGenericMethod(new[] { type });
