@@ -6,6 +6,7 @@ using FakeItEasy;
 using System.Reflection;
 using FakeItEasy.AutoMocker;
 using System.Linq.Expressions;
+using System.Text.RegularExpressions;
 
 namespace FakeItEasy
 {
@@ -19,14 +20,16 @@ namespace FakeItEasy
         /// <remarks>
         /// Uses the greediest constructors
         /// </remarks>
+        /// <param name="typePattern">A regex pattern used when scanning properties to inject. Injects all properties with a type name that matches the pattern.</param>
+        /// <param name="recursive">Whether to recursively fakes all child dependencies (recommended). If false, it will use FakeItEasy to handle constructor injection on children.</param>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
-        public static MockContainer<T> AutoMock<T>(bool recursive = true) where T : class
+        public static MockContainer<T> AutoMock<T>(Action<FakeSetterConvention> action = null, bool recursive = true) where T : class
         {
             ObjectGraph graph = BuildGraph(typeof(T));
 
             var fakes = new Dictionary<Type, object>();
-            var subject = CreateSubject<T>(graph, fakes, recursive);
+            var subject = CreateSubject<T>(graph, fakes, recursive, action);
 
             return new MockContainer<T>(subject, fakes);
         }
@@ -61,7 +64,7 @@ namespace FakeItEasy
             return node;
         }
 
-        static T CreateSubject<T>(ObjectGraph graph, Dictionary<Type, object> fakes, bool recursive) where T : class
+        static T CreateSubject<T>(ObjectGraph graph, Dictionary<Type, object> fakes, bool recursive, Action<FakeSetterConvention> action) where T : class
         {
             List<object> parameters = new List<object>();
 
@@ -81,8 +84,25 @@ namespace FakeItEasy
                 }
             }
 
-            return Activator.CreateInstance(typeof(T), parameters.ToArray()) as T;
-            //TODO: After constructing, check for Properties that are null and fill those in if they have virtual stuff
+            var sub = Activator.CreateInstance(typeof(T), parameters.ToArray()) as T;
+
+            if (action != null)
+            {
+                FakeSetterConvention convention = new FakeSetterConvention();
+                action(convention);
+
+                var dependencies = sub.GetType().GetProperties().Where(p => p.CanWrite && convention.Match(p));
+
+                foreach (var dep in dependencies)
+                {
+                    var depGraph = BuildGraph(dep.PropertyType);
+                    var d = CreateDependency(depGraph, fakes);
+                    if (d != null)
+                        dep.SetValue(sub, d, null);
+                }
+            }
+           
+            return sub;
         }
 
         static object CreateDependency(ObjectGraph graph, Dictionary<Type, object> fakes)

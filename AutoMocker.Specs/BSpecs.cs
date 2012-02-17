@@ -63,7 +63,7 @@ namespace AutoMocker.Specs
 
         Establish context = () =>
         {
-            graph = B.AutoMock<ASubject>(false);
+            graph = B.AutoMock<ASubject>(null, false);
             A.CallTo(() => graph.GetMock<IDependency>().whatever()).Returns("Faked!!");
             A.CallTo(() => graph.GetMock<ADependency>().GetString()).Returns("Faked As Well!!");
         };
@@ -80,6 +80,38 @@ namespace AutoMocker.Specs
         {
             graph.Subject.GetSomething().ShouldEqual("Faked As Well!!");
         };
+    }
+
+    public class when_faking_property_dependencies_by_name
+    {
+        static MockContainer<PropertySubject> graph;
+
+        Establish context = () =>
+        {
+            graph = B.AutoMock<PropertySubject>(p => p.NameMatches(name => name.EndsWith("Dependency")));
+        };
+
+        Because of = () => { };
+
+        It should_inject_matching_properties = () => graph.Subject.ADependency.ShouldNotBeNull();
+
+        It should_not_inject_non_matching_properties = () => graph.Subject.Something.ShouldBeNull();
+    }
+
+    public class when_faking_property_dependencies_by_type
+    {
+        static MockContainer<PropertySubject> graph;
+
+        Establish context = () =>
+        {
+            graph = B.AutoMock<PropertySubject>(p => p.TypeMatches(type => type == typeof(IDependency)));
+        };
+
+        Because of = () => { };
+
+        It should_inject_matching_properties = () => graph.Subject.Something.ShouldNotBeNull();
+
+        It should_not_inject_non_matching_properties = () => graph.Subject.ADependency.ShouldBeNull();
     }
 
     public class NoConstructorDependency
@@ -139,6 +171,16 @@ namespace AutoMocker.Specs
         {
             return dep2.whatever();
         }
+    }
+
+    public class PropertySubject
+    {
+        public PropertySubject()
+        {
+        }
+
+        public ADependency ADependency { get; set; }
+        public IDependency Something { get; set; }
     }
 
     public class SubjectWithBadDependencies : ASubject
