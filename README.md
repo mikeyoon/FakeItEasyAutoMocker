@@ -4,7 +4,7 @@
 
 This tool is designed to make it easier to create a class under test for unit testing. The automocker will create a concrete class of the given type and fill in all its dependencies using FakeItEasy. It also has a function for retrieving the instance of a faked dependency so it can be setup. One of the major differences between this automocker and others is that FakeItEasy.Automocker will automock concerete dependencies, and not just interfaces. Since it still relies on FakeItEasy, your concrete dependencies still have to have all virtual functions for it to work properly.
 
-Depends on FakeItEasy (http://code.google.com/p/fakeiteasy), of course.
+Depends on FakeItEasy (https://github.com/FakeItEasy/FakeItEasy), of course.
 
 ## Usage
 
